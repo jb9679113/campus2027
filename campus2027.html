@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Campus2027 大模型实习数据库</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system','BlinkMacSystemFont','"SF Pro Text"','"Helvetica Neue"','sans-serif'],
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    :root {
+      --bg: #f5f5f7; --surface: #ffffff; --ink: #1d1d1f;
+      --muted: #6e6e73; --accent: #0071e3; --accent-hover: #0077ed;
+      --border: rgba(0,0,0,0.08); --tag-bg: #f0f0f5;
+    }
+    .dark {
+      --bg: #000000; --surface: #1d1d1f; --ink: #f5f5f7;
+      --muted: #86868b; --accent: #2997ff; --accent-hover: #46b3ff;
+      --border: rgba(255,255,255,0.10); --tag-bg: #2a2a2e;
+    }
+    html { background: var(--bg); color: var(--ink); }
+    body { background: transparent; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+    .surface { background: var(--surface); border-color: var(--border); }
+    .text-muted { color: var(--muted); }
+    .text-accent { color: var(--accent); }
+    .border-custom { border-color: var(--border); }
+    .tag-bg { background: var(--tag-bg); }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .card:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+    .dark .card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+    .chip { background: var(--tag-bg); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; transition: all 0.15s; }
+    .chip:hover, .chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+    .dark .chip:hover, .dark .chip.active { background: var(--accent); }
+
+    input, select { background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 10px; }
+    input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
+
+    .fade-in { animation: fadeIn 0.3s ease forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    .stagger > * { opacity: 0; animation: fadeIn 0.3s ease forwards; }
+    .stagger > *:nth-child(1) { animation-delay: 0.05s; }
+    .stagger > *:nth-child(2) { animation-delay: 0.1s; }
+    .stagger > *:nth-child(3) { animation-delay: 0.15s; }
+    .stagger > *:nth-child(4) { animation-delay: 0.2s; }
+    .stagger > *:nth-child(5) { animation-delay: 0.25s; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div x-data="campusApp()" x-init="init()" class="max-w-5xl mx-auto px-4 py-8">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">Campus2027</h1>
+        <p class="text-sm text-muted mt-0.5">大模型实习官方投递入口 · <span x-text="total"></span> 条记录</p>
+      </div>
+      <button @click="darkMode = !darkMode" class="w-9 h-9 rounded-full surface flex items-center justify-center border border-custom hover:border-[var(--accent)] transition-colors">
+        <iconify-icon x-show="!darkMode" icon="lucide:moon" width="16" height="16"></iconify-icon>
+        <iconify-icon x-show="darkMode" icon="lucide:sun" width="16" height="16"></iconify-icon>
+      </button>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 stagger">
+      <template x-for="cat in categories" :key="cat.category">
+        <div class="surface rounded-xl px-4 py-3 border border-custom">
+          <div class="text-xs text-muted mb-1" x-text="cat.category"></div>
+          <div class="text-xl font-semibold" x-text="cat.count"></div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="surface rounded-2xl border border-custom p-4 mb-6">
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
+        <div class="flex-1 relative">
+          <iconify-icon icon="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" width="16" height="16"></iconify-icon>
+          <input type="text" x-model="keyword" @input="debounceSearch()" placeholder="搜索公司或团队名称..." class="w-full pl-9 pr-4 py-2.5 text-sm">
+        </div>
+        <div class="relative">
+          <iconify-icon icon="lucide:map-pin" class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" width="16" height="16"></iconify-icon>
+          <input type="text" x-model="location" @input="debounceSearch()" placeholder="城市（如：北京/上海）" class="w-full pl-9 pr-4 py-2.5 text-sm sm:w-44">
+        </div>
+      </div>
+      <!-- Category chips -->
+      <div class="flex flex-wrap gap-2">
+        <button class="chip px-3 py-1.5 text-xs font-medium" :class="selectedCategory === '' ? 'active' : ''" @click="selectCategory('')">全部</button>
+        <template x-for="cat in categories" :key="cat.category">
+          <button class="chip px-3 py-1.5 text-xs font-medium" :class="selectedCategory === cat.category ? 'active' : ''" @click="selectCategory(cat.category)" x-text="cat.category"></button>
+        </template>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm text-muted">
+        共 <span class="font-medium text-[var(--ink)]" x-text="total"></span> 条结果
+        <span x-show="loading" class="ml-2 inline-block w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin align-middle"></span>
+      </p>
+      <select x-model="pageSize" @change="changePageSize()" class="text-xs px-3 py-1.5">
+        <option value="20">每页 20 条</option>
+        <option value="50">每页 50 条</option>
+        <option value="100">每页 100 条</option>
+      </select>
+    </div>
+
+    <div class="space-y-3 stagger">
+      <template x-for="item in items" :key="item.id">
+        <a :href="item.url" target="_blank" class="card block p-4 group">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span class="tag-bg text-[10px] font-medium px-2 py-0.5 rounded-md text-muted" x-text="item.category"></span>
+                <span x-show="item.intern_type" class="tag-bg text-[10px] font-medium px-2 py-0.5 rounded-md text-muted" x-text="item.intern_type"></span>
+                <span x-show="item.location" class="flex items-center gap-1 text-xs text-muted">
+                  <iconify-icon icon="lucide:map-pin" width="12" height="12"></iconify-icon>
+                  <span x-text="item.location"></span>
+                </span>
+              </div>
+              <h3 class="font-semibold text-base mb-0.5 truncate" x-text="item.company"></h3>
+              <p class="text-sm text-muted truncate" x-text="item.team || ''"></p>
+            </div>
+            <div class="flex-shrink-0 text-right">
+              <div class="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center group-hover:scale-110 transition-transform">
+                <iconify-icon icon="lucide:arrow-up-right" class="text-white" width="14" height="14"></iconify-icon>
+              </div>
+              <p x-show="item.deadline" class="text-[10px] text-muted mt-1.5" x-text="item.deadline"></p>
+            </div>
+          </div>
+        </a>
+      </template>
+
+      <!-- Empty state -->
+      <div x-show="!loading && items.length === 0" class="text-center py-16 text-muted">
+        <iconify-icon icon="lucide:search-x" width="40" height="40" class="mx-auto mb-3 opacity-30"></iconify-icon>
+        <p class="text-sm">没有找到匹配的实习机会</p>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div x-show="totalPages > 1" class="flex items-center justify-center gap-2 mt-8">
+      <button @click="goPage(currentPage - 1)" :disabled="currentPage <= 1" class="w-9 h-9 rounded-lg surface border border-custom disabled:opacity-30 flex items-center justify-center hover:border-[var(--accent)] transition-colors">
+        <iconify-icon icon="lucide:chevron-left" width="16" height="16"></iconify-icon>
+      </button>
+      <template x-for="p in visiblePages" :key="p">
+        <button @click="goPage(p)" class="w-9 h-9 rounded-lg border transition-colors"
+          :class="p === currentPage ? 'bg-[var(--accent)] text-white border-[var(--accent)]' : 'surface border-custom hover:border-[var(--accent)]'">
+          <span x-text="p"></span>
+        </button>
+      </template>
+      <button @click="goPage(currentPage + 1)" :disabled="currentPage >= totalPages" class="w-9 h-9 rounded-lg surface border border-custom disabled:opacity-30 flex items-center justify-center hover:border-[var(--accent)] transition-colors">
+        <iconify-icon icon="lucide:chevron-right" width="16" height="16"></iconify-icon>
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-12 text-center text-xs text-muted">
+      数据来源：<a href="https://github.com" target="_blank" class="text-[var(--accent)] hover:underline">Campus2027 GitHub</a> · API 数据更新于本地 SQLite
+    </footer>
+  </div>
+
+  <script>
+    function campusApp() {
+      return {
+        darkMode: false,
+        keyword: '',
+        location: '',
+        selectedCategory: '',
+        categories: [],
+        items: [],
+        total: 0,
+        currentPage: 1,
+        pageSize: 20,
+        totalPages: 1,
+        loading: false,
+        apiBase: 'http://localhost:8000',
+        searchTimer: null,
+
+        init() {
+          // Dark mode
+          if (localStorage.theme === 'dark' || (!localStorage.theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            this.darkMode = true;
+          }
+          this.$watch('darkMode', val => {
+            document.documentElement.classList.toggle('dark', val);
+            localStorage.theme = val ? 'dark' : 'light';
+          });
+
+          this.loadStats();
+          this.loadItems();
+        },
+
+        async loadStats() {
+          try {
+            const res = await fetch(`${this.apiBase}/stats`);
+            const data = await res.json();
+            this.categories = data.categories || [];
+            this.total = data.total || 0;
+          } catch (e) {
+            this.categories = [];
+            this.total = 0;
+          }
+        },
+
+        async loadItems() {
+          this.loading = true;
+          try {
+            const params = new URLSearchParams({
+              page: this.currentPage,
+              page_size: this.pageSize,
+            });
+            if (this.selectedCategory) params.set('category', this.selectedCategory);
+            if (this.keyword) params.set('keyword', this.keyword);
+            if (this.location) params.set('location', this.location);
+
+            const res = await fetch(`${this.apiBase}/internships?${params}`);
+            const data = await res.json();
+            this.items = data.data || [];
+            this.total = data.total || 0;
+            this.totalPages = Math.ceil(this.total / this.pageSize);
+          } catch (e) {
+            this.items = [];
+            this.total = 0;
+          }
+          this.loading = false;
+        },
+
+        selectCategory(cat) {
+          this.selectedCategory = cat;
+          this.currentPage = 1;
+          this.loadItems();
+        },
+
+        debounceSearch() {
+          clearTimeout(this.searchTimer);
+          this.searchTimer = setTimeout(() => {
+            this.currentPage = 1;
+            this.loadItems();
+          }, 350);
+        },
+
+        changePageSize() {
+          this.currentPage = 1;
+          this.loadItems();
+        },
+
+        goPage(p) {
+          if (p < 1 || p > this.totalPages) return;
+          this.currentPage = p;
+          this.loadItems();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        get visiblePages() {
+          const pages = [];
+          const total = this.totalPages;
+          const cur = this.currentPage;
+          if (total <= 7) {
+            for (let i = 1; i <= total; i++) pages.push(i);
+          } else {
+            if (cur <= 4) {
+              for (let i = 1; i <= 5; i++) pages.push(i);
+              pages.push('…'); pages.push(total);
+            } else if (cur >= total - 3) {
+              pages.push(1); pages.push('…');
+              for (let i = total - 4; i <= total; i++) pages.push(i);
+            } else {
+              pages.push(1); pages.push('…');
+              for (let i = cur - 1; i <= cur + 1; i++) pages.push(i);
+              pages.push('…'); pages.push(total);
+            }
+          }
+          return pages;
+        },
+      }
+    }
+  </script>
+</body>
+</html>
